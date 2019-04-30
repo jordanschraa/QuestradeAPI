@@ -1,4 +1,4 @@
-# questradeAPI
+# QuestradeAPI
 
 ## Script to import data from Questrade into Google Sheets for advanced analytics using respective APIs
 
