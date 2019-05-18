@@ -46,13 +46,15 @@ def qt_login(name):
 
 #send api call to questrade server
 #requires auth dictonary returned from qt_login()
-def qt_call(auth, method, account = None):
+def qt_call(auth, method, account = None, startTime = None, endTime = None):
        
     #if there is a specific account to run api call against change URL    
     if account == None:
         url = auth["api_server"]+"v1/"+method
-    else:
+    elif account != None and startTime == None:
         url = auth["api_server"]+"v1/accounts/"+account+"/"+method
+    else:
+        url = auth["api_server"]+"v1/accounts/"+account+"/"+method+"?startTime="+startTime+"&endTime="+endTime+"&"
     request_headers = {"Content-Type" : "application/json", "Authorization" : auth["token_type"]+" "+auth["access_token"]}
     response = requests.get(url, headers=request_headers)
     
@@ -80,6 +82,7 @@ def update_account(sheet, name, row):
     
     #dictonary for mapping names to columns
     mapping = {"jordanTFSA" : "B", "danelleTFSA" : "D", "jasperTFSA" : "F", "jasperRRSP" : "H"}
+    deposits = {"jordanTFSA" : "R", "danelleTFSA" : "T", "jasperTFSA" : "V", "jasperRRSP" : "X"}
     qt_auth = qt_login(name)
     
     accounts = qt_call(qt_auth, "accounts")
@@ -94,8 +97,25 @@ def update_account(sheet, name, row):
         else:
             equity = (balances["combinedBalances"][1]["totalEquity"])
             
-        #update row with total equity
+        #update row with total equity 
         sheet.update_acell(mapping[name+account["type"]]+str(row), equity)
+        
+        #check to see if there where any deposits or withdrawals
+        #assumes there will only be one desposit or withdrawal in a day #break
+        datestring = str(datetime.datetime.today()).split(" ")[0]
+        funds = qt_call(qt_auth, "activities", account["number"], datestring+"T00:00:00-05:00", datestring+"T17:00:00-05:00")
+        if funds["activities"] == []:
+            amount = 0
+        else:
+            for activity in funds["activities"]:
+                if activity["type"] == "Deposits" or activity["type"] == "Withdrawls":
+                    amount = activity["netAmount"]
+                    print(activity)
+                    break
+                else:
+                    amount = 0
+        #update spreadsheet with deposit amount for the day
+        sheet.update_acell(deposits[name+account["type"]]+str(row), amount)
     
     return
 
@@ -112,6 +132,7 @@ def update_percentages(sheet, row):
         new = sheet.acell(letter+str(row)).value
         old = (int(old[1:].replace(",","")))
         new = (int(new[1:].replace(",","")))
+
         #calculate percent
         percent = ((new - old) / old)
         
@@ -145,7 +166,7 @@ def main():
     update_account(sheet, "jasper", row)
     
     #update daily percentages
-    update_percentages(sheet, row)
+    #update_percentages(sheet, row)
 
 if __name__ == "__main__":
     main()
